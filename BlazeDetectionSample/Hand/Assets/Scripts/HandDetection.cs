@@ -60,7 +60,7 @@ public class HandDetection : MonoBehaviour
         while(this)
         {
             await Awaitable.NextFrameAsync();
-            if(!cameraManager.TryAcquireLatestCpuImage(out var image))
+            if(!(cameraManager && cameraManager.TryAcquireLatestCpuImage(out var image)))
                 continue;
 
             try
