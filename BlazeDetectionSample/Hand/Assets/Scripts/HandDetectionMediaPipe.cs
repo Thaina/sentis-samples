@@ -1,7 +1,8 @@
 using System;
-using System.Diagnostics;
 
 using UnityEngine;
+using UnityEngine.SceneManagement;
+
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 
@@ -13,10 +14,17 @@ using Mediapipe.Tasks.Vision.HandLandmarker;
 
 public class HandDetectionMediaPipe : MonoBehaviour
 {
-    [RuntimeInitializeOnLoadMethod]
+    [RuntimeInitializeOnLoadMethod()]
     static void Init()
     {
         Screen.sleepTimeout = SleepTimeout.NeverSleep;
+
+        SceneManager.sceneUnloaded += (scene) => {
+            if(scene.name.StartsWith("AR"))
+                LoaderUtility.Deinitialize();
+
+            LoaderUtility.Initialize();
+        };
     }
 
     public HandPreview handPreview;
@@ -46,12 +54,14 @@ public class HandDetectionMediaPipe : MonoBehaviour
         var imageTexture = new Texture2D(256,256,TextureFormat.RGBA32,false);
         while(this)
         {
-            await Awaitable.NextFrameAsync();
-            if(!(cameraManager && cameraManager.TryAcquireLatestCpuImage(out var image)))
-                continue;
+            XRCpuImage image = default;
 
             try
             {
+                await Awaitable.NextFrameAsync();
+                if(!(cameraManager && cameraManager.TryAcquireLatestCpuImage(out image)))
+                    continue;
+
                 var ratio = image.width / (float)image.height;
                 var textureSize = new Vector2Int(image.width,image.height);
                 if(new Vector2Int(imageTexture.width,imageTexture.height) != textureSize)
