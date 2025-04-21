@@ -4,6 +4,7 @@
 // license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
+using System;
 using System.Collections.Generic;
 using Mediapipe.Tasks.Components.Containers;
 
@@ -163,7 +164,13 @@ namespace Mediapipe.Tasks.Vision.HandLandmarker
     /// </returns>
     public HandLandmarkerResult DetectForVideo(Image image, long timestampMillisec, Core.ImageProcessingOptions? imageProcessingOptions = null)
     {
-      using var outputPackets = DetectForVideoInternal(image, timestampMillisec, imageProcessingOptions);
+      return DetectForVideo(image,TimeSpan.FromMilliseconds(timestampMillisec),imageProcessingOptions);
+    }
+
+    /// <inheritdoc cref="DetectForVideo(Image, long, Core.ImageProcessingOptions?)"/>
+    public HandLandmarkerResult DetectForVideo(Image image, TimeSpan time, Core.ImageProcessingOptions? imageProcessingOptions = null)
+    {
+      using var outputPackets = DetectForVideoInternal(image, time, imageProcessingOptions);
 
       var result = default(HandLandmarkerResult);
       _ = TryBuildHandLandmarkerResult(outputPackets, ref result);
@@ -184,25 +191,36 @@ namespace Mediapipe.Tasks.Vision.HandLandmarker
     /// <param name="result">
     ///   <see cref="HandLandmarkerResult"/> to which the result will be written.
     /// </param>
-    /// <returns>
-    ///   <see langword="true"/> if some hands are detected, <see langword="false"/> otherwise.
-    /// </returns>
     public bool TryDetectForVideo(Image image, long timestampMillisec, Core.ImageProcessingOptions? imageProcessingOptions, ref HandLandmarkerResult result)
     {
-      using var outputPackets = DetectForVideoInternal(image, timestampMillisec, imageProcessingOptions);
+      return TryDetectForVideo(image,TimeSpan.FromMilliseconds(timestampMillisec),imageProcessingOptions,ref result);
+    }
+
+    /// <inheritdoc cref="TryDetectForVideo(Image, long, Core.ImageProcessingOptions?, ref HandLandmarkerResult)"/>
+    public bool TryDetectForVideo(Image image, TimeSpan time, Core.ImageProcessingOptions? imageProcessingOptions, ref HandLandmarkerResult result)
+    {
+      using var outputPackets = DetectForVideoInternal(image, time, imageProcessingOptions);
       return TryBuildHandLandmarkerResult(outputPackets, ref result);
     }
 
-    private PacketMap DetectForVideoInternal(Image image, long timestampMillisec, Core.ImageProcessingOptions? imageProcessingOptions = null)
+    private PacketMap DetectForVideoInternal(Image image, TimeSpan time, Core.ImageProcessingOptions? imageProcessingOptions = null)
     {
       ConfigureNormalizedRect(_normalizedRect, imageProcessingOptions, image, roiAllowed: false);
-      var timestampMicrosec = timestampMillisec * _MICRO_SECONDS_PER_MILLISECOND;
+      var timestampMicrosec = time.Ticks / 10;
 
       var packetMap = new PacketMap();
       packetMap.Emplace(_IMAGE_IN_STREAM_NAME, Packet.CreateImageAt(image, timestampMicrosec));
       packetMap.Emplace(_NORM_RECT_STREAM_NAME, Packet.CreateProtoAt(_normalizedRect, timestampMicrosec));
 
       return ProcessVideoData(packetMap);
+    }
+
+    /// <summary>
+    /// <inheritdoc cref="DetectAsync(Image, TimeSpan, Core.ImageProcessingOptions?)"/>
+    /// </summary>
+    public void DetectAsync(Image image, long timestampMillisec, Core.ImageProcessingOptions? imageProcessingOptions = null)
+    {
+      DetectAsync(image,TimeSpan.FromMilliseconds(timestampMillisec), imageProcessingOptions);
     }
 
     /// <summary>
@@ -218,10 +236,10 @@ namespace Mediapipe.Tasks.Vision.HandLandmarker
     ///   images if needed. In other words, it's not guaranteed to have output per
     ///   input image.
     /// </summary>
-    public void DetectAsync(Image image, long timestampMillisec, Core.ImageProcessingOptions? imageProcessingOptions = null)
+    public void DetectAsync(Image image, TimeSpan time, Core.ImageProcessingOptions? imageProcessingOptions = null)
     {
       ConfigureNormalizedRect(_normalizedRect, imageProcessingOptions, image, roiAllowed: false);
-      var timestampMicrosec = timestampMillisec * _MICRO_SECONDS_PER_MILLISECOND;
+      var timestampMicrosec = time.Ticks / 10;
 
       var packetMap = new PacketMap();
       packetMap.Emplace(_IMAGE_IN_STREAM_NAME, Packet.CreateImageAt(image, timestampMicrosec));

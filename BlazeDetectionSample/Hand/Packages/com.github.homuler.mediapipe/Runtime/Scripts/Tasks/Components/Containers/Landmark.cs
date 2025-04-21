@@ -9,6 +9,7 @@ using System.Collections.Generic;
 
 // TODO: use System.MathF
 using Mathf = UnityEngine.Mathf;
+using Vector3 = UnityEngine.Vector3;
 
 namespace Mediapipe.Tasks.Components.Containers
 {
@@ -99,6 +100,8 @@ namespace Mediapipe.Tasks.Components.Containers
 
     public override string ToString()
       => $"{{ \"x\": {x}, \"y\": {y}, \"z\": {z}, \"visibility\": {Util.Format(visibility)}, \"presence\": {Util.Format(presence)}, \"name\": \"{name}\" }}";
+
+    public static explicit operator Vector3(Landmark landmark) => new Vector3(landmark.x,landmark.y,landmark.z);
   }
 
   /// <summary>
@@ -170,6 +173,8 @@ namespace Mediapipe.Tasks.Components.Containers
 
     public override string ToString()
       => $"{{ \"x\": {x}, \"y\": {y}, \"z\": {z}, \"visibility\": {Util.Format(visibility)}, \"presence\": {Util.Format(presence)}, \"name\": \"{name}\" }}";
+
+    public static explicit operator Vector3(NormalizedLandmark landmark) => new Vector3(landmark.x,landmark.y,landmark.z);
   }
 
   /// <summary>

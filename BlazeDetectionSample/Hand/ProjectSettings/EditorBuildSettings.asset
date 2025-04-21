@@ -8,9 +8,6 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/ARMediaPipeHandDetection.unity
     guid: 0f48e5ad5e464ae48bc9c5f8938b21b9
-  - enabled: 1
-    path: Assets/ARHandDetection.unity
-    guid: f8f1d1a1b73a61c49b755b16763cc973
   m_configObjects:
     UnityEditor.XR.ARCore.ARCoreSettings: {fileID: 11400000, guid: 3881f513a65ada94f83abb2d1edb8fcd, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dependencies>
+  <androidPackages>
+    <!-- OpenCV Android SDK -->
+    <androidPackage spec="org.opencv:opencv:4.10.+" />
+  </androidPackages>
+
+  <!-- iOS CocoaPods -->
+  <iosPods>
+    <iosPod name="OpenCV" version="4.10.+" />
+  </iosPods>
+</dependencies>
