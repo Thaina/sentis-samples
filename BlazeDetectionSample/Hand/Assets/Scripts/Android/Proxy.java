@@ -41,7 +41,8 @@ public class Proxy
                                                     0.2, // k2
                                                     0.01, // p1 - tangential distortion
                                                     0.01, // p2
-                                                    0.3);
+                                                    0.3  // k3
+                                                    );
 
             // Output rotation and translation
             Mat rvec = new Mat();

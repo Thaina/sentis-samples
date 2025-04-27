@@ -89,6 +89,50 @@ public class HandDetectionMediaPipe : MonoBehaviour
         }
     }
 
+    public static float2? FindTForLength(in Ray ray,float z,in Ray ray1,float z1,float l)
+    {
+        // float3 p = o + d * t;
+        // float3 p1 = o1 + d1 * t;
+
+        // length(p1 - p) == l
+        // length((o1 + d1 * (z1 + t)) - (o + d * (z + t))) == l
+        // length((o1 + (d1 * z1) + (d1 * t)) - (o + (d * z) + (d * t))) == l
+        // length((o1 + (d1 * z1) - o - (d * z)) + (d1 * t) - (d * t))) == l
+        // length((o1 - o + (d1 * z1) - (d * z)) + t * (d1 - d))) == l
+        float3 o1 = ray1.origin - ray.origin + (ray1.direction * z1) - (ray.direction * z);
+        float3 d1 = ray1.direction - ray.direction;
+
+        // length(o1 + t * d1) == l
+        // csum((o1 + t * d1)^2) == l^2
+        // csum(o1^2 + (2 * t * d1 * o1) + (t * d1)^2) == l^2
+        // csum(o1^2) + csum(2 * t * d1 * o1) + csum((t * d1)^2) == l^2
+        // csum(o1^2) + 2 * t * csum(d1 * o1) + t^2 * csum((d1)^2) == l^2
+        // t^2 * csum(d1^2) + t * 2 * csum(d1 * o1) + csum(o1^2) - l^2 == 0
+        float a = math.csum(d1 * d1);
+        float b = 2 * math.csum(d1 * o1);
+        float c = math.csum(o1 * o1) - l*l;
+
+        return SolveQuadratic(a,b,c);
+    }
+
+    public static float2? SolveQuadratic(float a,float b,float c)
+    {
+        float discriminant = b * b - 4 * a * c;
+
+        // No real solutions
+        if (discriminant < 0)
+            return null;
+
+        float sqrtDiscriminant = math.sqrt(discriminant);
+        float t1 = (-b + sqrtDiscriminant) / (2 * a);
+        float t2 = (-b - sqrtDiscriminant) / (2 * a);
+
+        return new float2(t1, t2);
+    }
+
+    public float[] extends = new float[] { 0.1f,0.1f,0.09f };
+    public int2[] fingerPairIndex = new [] { new int2(0,9),new int2(0,5),new int2(5,17) };
+
     public async void Start()
     {
         var baseOptions = new BaseOptions(modelAssetBuffer: handLandmarkModel.bytes);
@@ -132,14 +176,48 @@ public class HandDetectionMediaPipe : MonoBehaviour
                 lastResult = result;
 
                 var camera = Camera.main;
-
+                float screenRatio = Screen.width / (float)Screen.height;
                 var rot = Quaternion.Euler(GizmoRot) * camera.transform.rotation;
-                foreach(var (flat,world) in result.handLandmarks.Zip(result.handWorldLandmarks,(outer,inner) => (outer,inner)))
+                foreach(var flat in result.handLandmarks)
                 {
                     // Convert projection matrix to camera matrix format
                     var projMatrix = camera.projectionMatrix;
 
-                    var worldLandmarks = world.landmarks.Select((item) => GizmoScale * (Vector3)item).ToArray();
+                    var flatLandmarks = flat.landmarks.Select((landmark) => {
+                        float3 point = (Vector3)landmark;
+
+                        point.xy = (point.xy * 2) - 1;
+
+                        // Apply display matrix transformation
+                        point.xy = math.transform(displayMatrix,new float3(point.xy,1)).xy;
+#if !UNITY_EDITOR
+                        point.x /= screenRatio;
+#endif
+                        point.xy = (point.xy + 1) / 2;
+
+                        return point;
+                    }).ToArray();
+
+                    var rays = flatLandmarks.Select((point) => {
+                        return camera.ViewportPointToRay(point);
+                    }).ToArray();
+
+                    var triangleRays = new [] { rays[0],rays[5],rays[17] };
+
+                    float e = fingerPairIndex.Select((fingerIndex,i) => {
+                        var (m,n) = (fingerIndex[0],fingerIndex[1]);
+                        var f2t = FindTForLength(rays[m],flatLandmarks[m].z,rays[n],flatLandmarks[n].z,extends[i]);
+                        return f2t;
+                    }).OfType<float2>().SelectMany((f2t) => new [] { f2t[0],f2t[1] }).OrderBy((e) => {
+                        return fingerPairIndex.Select((fingerIndex,i) => {
+                            var (m,n) = (fingerIndex[0],fingerIndex[1]);
+                            return math.abs(math.distance(rays[m].GetPoint(flatLandmarks[m].z + e),rays[n].GetPoint(flatLandmarks[n].z + e)) - extends[i]);
+                        }).Sum();
+                    }).DefaultIfEmpty(1).FirstOrDefault();
+
+                    var worldLandmarks = rays.Select((ray,i) => {
+                        return ray.GetPoint(flatLandmarks[i].z + e);
+                    }).ToArray();
 
                     // Create transformation matrix
                     var transform = Matrix4x4.identity;
@@ -152,7 +230,7 @@ public class HandDetectionMediaPipe : MonoBehaviour
                     // Convert 3D points to flattened array
                     var points3D = worldLandmarks.SelectMany(p => new double[] { p.x, p.y, p.z }).ToArray();
                     // Convert 2D points to flattened array
-                    var points2D = flat.landmarks.SelectMany(p => new double[] { p.x * imageTexture.width, p.y * imageTexture.height }).ToArray();
+                    var points2D = flatLandmarks.SelectMany(p => new double[] { p.x * imageTexture.width, p.y * imageTexture.height }).ToArray();
                     // Convert camera matrix to double array
                     var cameraProjectionMatrix = Enumerable.Range(0,16).Select((i) => (double)projMatrix[i]).ToArray();
 
@@ -173,20 +251,20 @@ public class HandDetectionMediaPipe : MonoBehaviour
                     // Convert landmarks to OpenCV format
                     var objPoints = worldLandmarks.Select(v => new Point3f(v.x, v.y, v.z));
 
-                    var imgPoints = flat.landmarks.Select(l => new Point2f(l.x * imageTexture.width, l.y * imageTexture.height));
+                    var imgPoints = flatLandmarks.Select(l => new Point2f(l.x * imageTexture.width, l.y * imageTexture.height));
 
                     // Create distortion coefficients (k1, k2, p1, p2, k3)
-                    using var distCoeffs = InputArray.Create(new double[] {
+                    var distCoeffs = new double[] {
                         0.1, // k1 - radial distortion
                         0.2, // k2
                         0.01, // p1 - tangential distortion
                         0.01, // p2
                         0.3  // k3
-                    });
+                    };
 
                     var rvec = new double[3];
                     var tvec = new double[3];
-                    Cv2.SolvePnP(objPoints, imgPoints, cameraMatrix, null, ref rvec, ref tvec, false, solvePnPFlags);
+                    Cv2.SolvePnP(objPoints, imgPoints, cameraMatrix, distCoeffs, ref rvec, ref tvec, false, solvePnPFlags);
 
                     // Convert rotation vector to matrix
                     Cv2.Rodrigues(rvec, out var rotMatrix,out var jacobian);
@@ -199,12 +277,15 @@ public class HandDetectionMediaPipe : MonoBehaviour
                     transform[1, 3] = (float)tvec[1];
                     transform[2, 3] = (float)tvec[2];
 #endif
-                    transform = displayMatrix * transform;
-                    for(var i = 0; i < flat.landmarks.Count; i++)
+                    for(var i = 0; i < worldLandmarks.Length; i++)
                     {
-                        var position = transform.MultiplyPoint(worldLandmarks[i]);
+                        var worldLandmark = worldLandmarks[i];
+                        var position = transform.MultiplyPoint(worldLandmark);
                         position = camera.transform.TransformPoint(position);
                         handPreview.SetKeypoint(i, true, position);
+
+                        if(i == 0 && distance)
+                            distance.text = math.distance(worldLandmark,camera.transform.position).ToString("0.00");
                     }
                 }
             }
@@ -221,6 +302,8 @@ public class HandDetectionMediaPipe : MonoBehaviour
     }
 
     public float scale = 1;
+
+    public TMPro.TMP_Text distance;
 
     HandLandmarkerResult lastResult;
 	void OnDrawGizmos()
